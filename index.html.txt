@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>匹克球公平排場</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; font-family:-apple-system,"Noto Sans TC",sans-serif; }
+  body { background:#f0f4f8; color:#1a2b3c; padding:16px; max-width:720px; margin:0 auto; }
+  h1 { font-size:1.4rem; text-align:center; margin-bottom:4px; }
+  .sub { text-align:center; color:#667; font-size:.85rem; margin-bottom:16px; }
+  .card { background:#fff; border-radius:12px; padding:16px; margin-bottom:12px; box-shadow:0 2px 6px rgba(0,0,0,.08); }
+  label { display:block; font-weight:600; margin:10px 0 4px; font-size:.9rem; }
+  textarea, input, select { width:100%; padding:10px; border:1px solid #ccd; border-radius:8px; font-size:1rem; }
+  button { padding:12px; margin-top:10px; border:none; border-radius:10px; background:#0a7d4f; color:#fff; font-size:1rem; font-weight:700; cursor:pointer; }
+  button.gray { background:#5b6b7b; }
+  button.red { background:#b23b3b; }
+  .full { width:100%; }
+  .court { border-left:6px solid #0a7d4f; }
+  .court h3 { font-size:1rem; color:#0a7d4f; margin-bottom:8px; }
+  .team { display:flex; justify-content:space-between; padding:5px 0; font-size:1.1rem; }
+  .vs { text-align:center; color:#b23b3b; font-weight:700; margin:4px 0; }
+  .resting { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .tag { background:#e8eef4; padding:4px 10px; border-radius:20px; font-size:.85rem; }
+  table { width:100%; border-collapse:collapse; font-size:.9rem; }
+  th, td { padding:6px 8px; text-align:center; border-bottom:1px solid #e5eaf0; }
+  th { background:#f5f8fb; }
+  #qrbox { display:flex; justify-content:center; padding:10px; }
+  .round { text-align:center; font-size:1.15rem; font-weight:700; margin-bottom:10px; }
+  .btnrow { display:flex; gap:10px; } .btnrow button { flex:1; }
+  .xbtn { background:none; color:#b23b3b; font-weight:700; padding:2px 6px; margin:0; font-size:.9rem; cursor:pointer; }
+  .hint { font-size:.8rem; color:#789; text-align:center; margin-top:6px; }
+</style>
+</head>
+<body>
+
+<!-- ===== 設定頁 ===== -->
+<div id="setup">
+  <h1>匹克球公平排場</h1>
+  <div class="sub">輸入人數與場地 · 自動公平輪替 · QR Code 即時看場</div>
+  <div class="card">
+    <label>球員名單（每行一位）</label>
+    <textarea id="names" rows="6" placeholder="小明&#10;小華&#10;John&#10;Mary"></textarea>
+    <label>場地數量</label>
+    <select id="courts">
+      <option value="1">1 面</option><option value="2" selected>2 面</option>
+      <option value="3">3 面</option><option value="4">4 面</option>
+      <option value="5">5 面</option><option value="6">6 面</option>
+    </select>
+    <button class="full" onclick="start()">開始排場</button>
+  </div>
+</div>
+
+<!-- ===== 主持人畫面 ===== -->
+<div id="game" style="display:none">
+  <h1>匹克球公平排場</h1>
+  <div class="sub" id="headerInfo"></div>
+  <div class="round" id="roundTitle"></div>
+  <div id="courtList"></div>
+  <div class="card"><h3>本輪休息</h3><div class="resting" id="restList"></div></div>
+  <div class="card">
+    <div class="btnrow"><button class="full" onclick="nextRound()">結束本輪 → 重新公平安排</button></div>
+    <div class="btnrow">
+      <button class="gray" onclick="showQR()">顯示本輪 QR Code</button>
+      <button class="gray" onclick="copyLink()">複製本輪連結</button>
+    </div>
+    <div id="qrbox"></div>
+    <div class="hint">QR 每輪更新：重新安排後，請大家再掃一次</div>
+  </div>
+  <div class="card">
+    <div id="addBox">
+      <input id="newName" placeholder="新球員名字（下一輪生效）" onkeydown="if(event.key==='Enter')addPlayer()">
+      <button class="gray" onclick="addPlayer()">加入球員</button>
+    </div>
+  </div>
+  <div class="card">
+    <h3 style="margin-bottom:8px">公平統計（按 ✕ 可讓球員離場）</h3>
+    <table id="statsTable"></table>
+    <button class="red full" onclick="resetAll()">全部重來</button>
+  </div>
+</div>
+
+<!-- ===== 掃描者唯讀畫面 ===== -->
+<div id="viewer" style="display:none">
+  <h1>本輪對戰</h1>
+  <div class="sub" id="vTitle"></div>
+  <div id="vCourts"></div>
+  <div class="card"><h3>休息中</h3><div class="resting" id="vRest"></div></div>
+  <div class="hint">由主持人裝置更新；要看最新一輪請再掃一次 QR Code</div>
+  <div class="card"><button class="gray full" onclick="location.hash='';location.reload()">回到大廳</button></div>
+</div>
+
+<script>
+let state = null;
+const $ = id => document.getElementById(id);
+
+/* ---------- 公平演算法 ---------- */
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+function nextRound(){
+  // 先洗牌打散同分者，再用穩定排序：上場次數少 → 休息久 → 剛洗牌的隨機順序
+  const pool = shuffle([...state.players]).sort((a,b)=> a.played-b.played || a.lastPlayed-b.lastPlayed);
+  const slots = state.courts*4;
+  const playing = pool.slice(0, Math.min(slots, pool.length));
+  const resting = pool.slice(playing.length);
+
+  const assignment = [];
+  for(let c=0; c<state.courts && c*4+4<=playing.length; c++){
+    const t = shuffle(playing.slice(c*4, c*4+4));
+    assignment.push({ a:[t[0].name,t[1].name], b:[t[2].name,t[3].name] });
+  }
+  state.round++;
+  state.assignment = { assignment, resting: resting.map(p=>p.name) };
+  playing.forEach(p=>{ p.played++; p.lastPlayed = state.round; });
+  save(); render();
+}
+
+/* ---------- 畫面 ---------- */
+function start(){
+  const names = [...new Set($('names').value.split('\n').map(s=>s.trim()).filter(Boolean))];
+  const courts = parseInt($('courts').value);
+  if(names.length < 4){ alert('至少需要 4 位球員'); return; }
+  state = { players: names.map(n=>({name:n, played:0, lastPlayed:0})), courts, round:0, assignment:null };
+  nextRound();
+}
+
+function save(){ localStorage.setItem('pb_state', JSON.stringify(state)); }
+
+function courtHTML(c,i){
+  return `<div class="card court"><h3>場地 ${i+1}</h3>
+    <div class="team"><span>${c.a[0]} &amp; ${c.a[1]}</span><span class="vs">VS</span><span>${c.b[0]} &amp; ${c.b[1]}</span></div></div>`;
+}
+
+function render(){
+  $('setup').style.display='none'; $('game').style.display='block';
+  $('headerInfo').textContent = `${state.players.length} 位球員 · ${state.courts} 面場地 · 每輪上場 ${Math.min(state.courts*4, state.players.length)} 人`;
+  $('roundTitle').textContent = `第 ${state.round} 輪`;
+  $('courtList').innerHTML = state.assignment.assignment.map(courtHTML).join('');
+  $('restList').innerHTML = state.assignment.resting.map(n=>`<span class="tag">${n}</span>`).join('') || '<span class="tag">無</span>';
+  const rows = [...state.players].sort((a,b)=>a.played-b.played)
+    .map(p=>`<tr><td>${p.name}</td><td>${p.played}</td><td>${state.round-p.played}</td>
+      <td><span class="xbtn" onclick="removePlayer('${p.name.replace(/'/g,"\\'")}')">✕</span></td></tr>`).join('');
+  $('statsTable').innerHTML = `<tr><th>球員</th><th>上場</th><th>輪休</th><th></th></tr>${rows}`;
+}
+
+function addPlayer(){
+  const n = $('newName').value.trim();
+  if(!n) return;
+  if(state.players.some(p=>p.name===n)){ alert('已有同名球員'); return; }
+  state.players.push({name:n, played:0, lastPlayed:state.round}); // 本輪不插隊，下一輪優先上場
+  $('newName').value=''; save(); render();
+}
+
+function removePlayer(name){
+  if(state.players.length<=4){ alert('至少要保留 4 位球員'); return; }
+  state.players = state.players.filter(p=>p.name!==name);
+  // 若他正在場上，用休息者中上場最少的人遞補，維持 4 人開打
+  let courts = state.assignment.assignment.map(c=>({a:[...c.a], b:[...c.b]}));
+  const findCourt = () => courts.findIndex(c=>[...c.a,...c.b].includes(name));
+  let ci = findCourt();
+  while(ci>=0 && state.assignment.resting.length){
+    const rest = shuffle([...state.players]).sort((a,b)=>a.played-b.played||a.lastPlayed-b.lastPlayed)
+      .find(p=>state.assignment.resting.includes(p.name));
+    if(!rest) break;
+    const c = courts[ci];
+    if(c.a.includes(name)) c.a[c.a.indexOf(name)] = rest.name;
+    else c.b[c.b.indexOf(name)] = rest.name;
+    state.assignment.resting = state.assignment.resting.filter(n=>n!==rest.name);
+    ci = findCourt();
+  }
+  state.assignment.assignment = courts;
+  save(); render();
+}
+
+function resetAll(){
+  if(!confirm('確定全部重來？所有紀錄會清除。')) return;
+  localStorage.removeItem('pb_state'); location.reload();
+}
+
+/* ---------- QR：把本輪資料放進網址 ---------- */
+function roundURL(){
+  const d = { round:state.round, courts:state.assignment.assignment, resting:state.assignment.resting };
+  return location.origin + location.pathname + '#r=' + btoa(encodeURIComponent(JSON.stringify(d)));
+}
+function showQR(){
+  const box = $('qrbox');
+  if(box.dataset.on){ box.innerHTML=''; box.dataset.on=''; return; }
+  box.innerHTML=''; box.dataset.on='1';
+  new QRCode(box, { text: roundURL(), width:180, height:180 });
+}
+function copyLink(){
+  navigator.clipboard.writeText(roundURL())
+    .then(()=>alert('本輪連結已複製，可以貼到群組裡'))
+    .catch(()=>prompt('請手動複製：', roundURL()));
+}
+
+/* ---------- 啟動 ---------- */
+function loadHashViewer(){
+  const m = location.hash.match(/^#r=(.+)$/);
+  if(!m) return false;
+  try{
+    const d = JSON.parse(decodeURIComponent(atob(decodeURIComponent(m[1].replace(/^#r=/,'')))));
+    $('game').style.display='none'; $('setup').style.display='none'; $('viewer').style.display='block';
+    $('vTitle').textContent = `第 ${d.round} 輪`;
+    $('vCourts').innerHTML = d.courts.map(courtHTML).join('');
+    $('vRest').innerHTML = d.resting.map(n=>`<span class="tag">${n}</span>`).join('') || '<span class="tag">無</span>';
+    return true;
+  }catch(e){ return false; }
+}
+(function init(){
+  if(loadHashViewer()) return;
+  const s = localStorage.getItem('pb_state');
+  if(s){ state = JSON.parse(s); render(); }
+})();
+</script>
+</body>
+</html>
