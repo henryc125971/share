@@ -1,313 +1,217 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>匹克球公平排場</title>
-<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<html lang="zh-Hant"><head><meta charset="utf-8"><title>匹克球 Open Play 湊隊</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <style>
-  * { box-sizing:border-box; margin:0; padding:0; font-family:-apple-system,"Noto Sans TC",sans-serif; }
-  body { background:#f0f4f8; color:#1a2b3c; padding:16px; max-width:720px; margin:0 auto; }
-  h1 { font-size:1.4rem; text-align:center; margin-bottom:4px; }
-  .sub { text-align:center; color:#667; font-size:.85rem; margin-bottom:16px; }
-  .card { background:#fff; border-radius:12px; padding:16px; margin-bottom:12px; box-shadow:0 2px 6px rgba(0,0,0,.08); }
-  label { display:block; font-weight:600; margin:10px 0 4px; font-size:.9rem; }
-  textarea, input, select { width:100%; padding:10px; border:1px solid #ccd; border-radius:8px; font-size:1rem; }
-  button { padding:12px; margin-top:10px; border:none; border-radius:10px; background:#0a7d4f; color:#fff; font-size:1rem; font-weight:700; cursor:pointer; }
-  button.gray { background:#5b6b7b; } button.red { background:#b23b3b; } button.blue { background:#1e6091; }
-  .full { width:100%; }
-  .court { border-left:6px solid #0a7d4f; }
-  .court h3 { font-size:1rem; color:#0a7d4f; margin-bottom:8px; }
-  .team { display:flex; justify-content:space-between; padding:5px 0; font-size:1.05rem; }
-  .vs { text-align:center; color:#b23b3b; font-weight:700; margin:4px 0; font-size:.9rem; }
-  .resting { display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; }
-  .tag { background:#e8eef4; padding:4px 10px; border-radius:20px; font-size:.85rem; }
-  .rating-tag { font-size:.72rem; color:#0a7d4f; background:#e3f5ec; padding:2px 6px; border-radius:10px; margin-left:4px; }
-  table { width:100%; border-collapse:collapse; font-size:.9rem; }
-  th, td { padding:6px 8px; text-align:center; border-bottom:1px solid #e5eaf0; }
-  th { background:#f5f8fb; }
-  #qrbox { display:flex; justify-content:center; padding:10px; }
-  .round { text-align:center; font-size:1.15rem; font-weight:700; margin-bottom:10px; }
-  .btnrow { display:flex; gap:10px; margin-top:6px; } .btnrow button { flex:1; }
-  .xbtn { background:none; color:#b23b3b; font-weight:700; padding:2px 6px; margin:0; font-size:.85rem; cursor:pointer; }
-  .hint { font-size:.8rem; color:#789; text-align:center; margin-top:6px; }
-  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; justify-content:center; align-items:center; padding:16px; z-index:999; }
-  .modal-content { background:#fff; border-radius:12px; padding:20px; width:100%; max-width:500px; max-height:85vh; overflow-y:auto; }
-  .matchbox { margin-bottom:12px; padding:10px; background:#f9fafb; border-radius:8px; }
-  .scoreline { display:flex; align-items:center; gap:8px; margin-top:6px; }
-  .scoreline input { width:80px; text-align:center; font-size:1.1rem; font-weight:bold; }
-  .result-line { font-size:.9rem; color:#333; margin-bottom:4px; }
-</style>
-</head>
-<body>
-
-<!-- ===== 設定頁 ===== -->
-<div id="setup">
-  <h1>匹克球公平排場</h1>
-  <div class="sub">輸入人數與場地 · DUPR 分數整合 · 匯出 DUPR CSV</div>
-  <div class="card">
-    <label>球員名單（每行一位；格式「名字, DUPR分數」，沒有分數可只填名字）</label>
-    <textarea id="names" rows="7" placeholder="王小明, 3.52&#10;李小華, 3.20&#10;John&#10;Mary, 4.01"></textarea>
-    <label>場地數量</label>
-    <select id="courts">
-      <option value="1">1 面</option><option value="2" selected>2 面</option>
-      <option value="3">3 面</option><option value="4">4 面</option>
-      <option value="5">5 面</option><option value="6">6 面</option>
-    </select>
-    <button class="full" onclick="start()">開始排場</button>
-  </div>
-</div>
-
-<!-- ===== 主持人畫面 ===== -->
-<div id="game" style="display:none">
-  <h1>匹克球公平排場</h1>
-  <div class="sub" id="headerInfo"></div>
-  <div class="round" id="roundTitle"></div>
-  <div id="courtList"></div>
-  <div class="card"><h3>本輪休息</h3><div class="resting" id="restList"></div></div>
-  <div class="card" id="lastResultCard" style="display:none">
-    <h3>上一輪結果</h3><div id="lastResult"></div>
-  </div>
-  <div class="card">
-    <button class="full" onclick="openScoreModal()">結束本輪（輸入分數並排下一輪）</button>
-    <div class="btnrow">
-      <button class="gray" onclick="showQR()">顯示本輪 QR Code</button>
-      <button class="gray" onclick="copyLink()">複製本輪連結</button>
-    </div>
-    <div id="qrbox"></div>
-    <div class="hint">QR 每輪更新：重新安排後，請大家再掃一次</div>
-  </div>
-  <div class="card">
-    <div style="display:flex; gap:8px;">
-      <input id="newName" placeholder="球員名字" style="flex:2;">
-      <input id="newDupr" placeholder="DUPR(選填)" type="number" step="0.01" style="flex:1;">
-    </div>
-    <button class="gray full" onclick="addPlayer()">加入球員（下一輪生效）</button>
-  </div>
-  <div class="card">
-    <h3 style="margin-bottom:8px">公平統計（按 ✕ 讓球員離場）</h3>
-    <table id="statsTable"></table>
-    <button class="blue full" onclick="exportDUPRCSV()">匯出對戰結果 (DUPR CSV)</button>
-    <button class="red full" onclick="resetAll()">全部重來</button>
-  </div>
-</div>
-
-<!-- ===== 分數輸入 Modal ===== -->
-<div id="scoreModal" class="modal-overlay">
-  <div class="modal-content">
-    <h2 style="font-size:1.2rem; margin-bottom:12px; text-align:center;">輸入第 <span id="mRoundNum"></span> 輪比分</h2>
-    <div id="modalScores"></div>
-    <div class="btnrow">
-      <button class="gray" onclick="closeScoreModal()">取消</button>
-      <button onclick="confirmRoundScores()">儲存並進入下一輪</button>
-    </div>
-  </div>
-</div>
-
-<!-- ===== 掃描者唯讀畫面 ===== -->
-<div id="viewer" style="display:none">
-  <h1>本輪對戰</h1>
-  <div class="sub" id="vTitle"></div>
-  <div id="vCourts"></div>
-  <div class="card"><h3>休息中</h3><div class="resting" id="vRest"></div></div>
-  <div class="card"><button class="gray full" onclick="location.hash='';location.reload()">回到大廳</button></div>
-</div>
-
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f6f7f4;--card:#fff;--tx:#1b2418;--mu:#6b7566;--ac:#3f8f2f;--ac2:#e8f3e4;--bd:#dde2d8;--wn:#c0562b}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141813;--card:#1e251c;--tx:#eaf0e6;--mu:#98a392;--ac:#6cc455;--ac2:#243322;--bd:#2f3a2c;--wn:#e8825a}}
+:root[data-theme="dark"]{--bg:#141813;--card:#1e251c;--tx:#eaf0e6;--mu:#98a392;--ac:#6cc455;--ac2:#243322;--bd:#2f3a2c;--wn:#e8825a}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 -apple-system,"PingFang TC","Noto Sans TC",sans-serif;padding:12px;max-width:640px;margin:auto}
+h1{font-size:20px;margin:4px 0 12px}h2{font-size:16px;margin:0 0 8px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
+label{display:block;font-size:13px;color:var(--mu);margin:8px 0 2px}
+input,textarea,select{width:100%;box-sizing:border-box;font:inherit;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx)}
+textarea{min-height:120px;font-size:14px}
+button{font:inherit;border:0;border-radius:8px;padding:10px 14px;background:var(--ac);color:#fff;cursor:pointer}
+button.g{background:var(--ac2);color:var(--tx);border:1px solid var(--bd)}button.w{background:var(--wn)}
+button:disabled{opacity:.4}
+.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}
+.team{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:6px 0}
+.team b{flex:1}.sc{width:56px!important;text-align:center}
+.win{color:var(--ac);font-weight:700}.mu{color:var(--mu);font-size:13px}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}th,td{padding:5px 6px;text-align:center;border-bottom:1px solid var(--bd);white-space:nowrap}td:nth-child(2),th:nth-child(2){text-align:left}
+#qr svg{width:180px;height:180px}
+</style></head><body>
+<h1>🥒 匹克球 Open Play 湊隊</h1>
+<div id="app"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script>
-let state = null;
-const $ = id => document.getElementById(id);
-const KEY = 'pickleball_fair_state_v2';
+var S=null,KEY='pb-openplay-v1',tab='play';
+try{S=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){}
+var DB=null,IS_ED=true,LIVE,pt=null;
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}pushLive()}
+function pushLive(){
+ if(!DB||!IS_ED)return;clearTimeout(pt);
+ pt=setTimeout(function(){
+  var pub=null;
+  if(S){var R=S.rounds[S.rounds.length-1],nm=function(t){return t.map(function(i){return S.players[i].name})};
+   pub={mode:MODES[S.mode],ended:S.ended,ri:S.rounds.length,
+    matches:R.matches.map(function(m){return{c:m.c,a:nm(m.a),b:nm(m.b),sa:m.sa,sb:m.sb,w:m.w}}),
+    bench:R.bench.map(function(i){return S.players[i].name}),
+    names:S.players.map(function(p){return p.name}),
+    st:S.players.slice().sort(function(a,b){return b.w-a.w||b.pd-a.pd||a.g-b.g}).map(function(p){return{n:p.name,g:p.g,w:p.w,l:p.l,pd:p.pd}})}}
+  try{DB.doc('live/state').set({j:JSON.stringify(pub),t:Date.now()}).catch(function(){})}catch(e){}
+ },700)}
+function setMe(v){try{localStorage.setItem('pb-me',v)}catch(e){}render()}
+function vrender(){
+ var L=LIVE;
+ if(L===undefined)return $('app').innerHTML='<div class="card mu">連線中…</div>';
+ if(!L)return $('app').innerHTML='<div class="card">主辦人尚未開局，開局後這裡會即時更新。</div>';
+ var me='';try{me=localStorage.getItem('pb-me')||''}catch(e){}
+ var h='<div class="card"><b>第 '+L.ri+' 輪'+(L.ended?'．已結束':'')+'</b><div class="mu">'+esc(L.mode)+'</div><label>我是</label><select onchange="setMe(this.value)"><option value="">選擇你的名字</option>'+
+  L.names.map(function(n){return'<option'+(n===me?' selected':'')+'>'+esc(n)+'</option>'}).join('')+'</select>';
+ if(me&&!L.ended){var pos=L.bench.indexOf(me)>=0?'本輪休息，請稍候':'';
+  L.matches.forEach(function(m){if(m.a.concat(m.b).indexOf(me)>=0)pos='請到場地 '+m.c});
+  h+='<div class="win" style="margin-top:8px;font-size:20px">'+esc(pos)+'</div>'}
+ h+='</div>';
+ var T=function(t,sc,w){var b=t.map(function(n){return n===me?'<u>'+esc(n)+'</u>':esc(n)}).join(' ＋ ');return'<div class="team"><b class="'+(w?'win':'')+'">'+(w?'🏆 ':'')+b+'</b><span>'+(sc===''?'':sc)+'</span></div>'};
+ L.matches.forEach(function(m){h+='<div class="card"><h2>場地 '+m.c+'</h2>'+T(m.a,m.sa,m.w==='a')+'<div class="mu" style="text-align:center">VS</div>'+T(m.b,m.sb,m.w==='b')+'</div>'});
+ h+='<div class="card"><b>休息中：</b>'+(L.bench.length?L.bench.map(esc).join('、'):'無')+'</div>';
+ h+='<div class="card tw"><h2>排名</h2><table><tr><th>#</th><th>球員</th><th>場數</th><th>勝</th><th>負</th><th>分差</th></tr>'+
+  L.st.map(function(p,i){return'<tr><td>'+(i+1)+'</td><td>'+esc(p.n)+'</td><td>'+p.g+'</td><td>'+p.w+'</td><td>'+p.l+'</td><td>'+p.pd+'</td></tr>'}).join('')+'</table></div>';
+ $('app').innerHTML=h}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function $(i){return document.getElementById(i)}
+var MODES={fair:'一般隨機（公平上場）',rank:'輸贏分強弱（贏家往高場）',dupr:'DUPR 實力配對'};
 
-/* ---------- 工具 ---------- */
-function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
-function show(id){ ['setup','game','viewer'].forEach(x => $(x).style.display = (x===id?'block':'none')); }
-
-function parsePlayers(){
-  return $('names').value.split('\n').map(s => s.trim()).filter(Boolean).map(line => {
-    const parts = line.split(/[,，]/);
-    const name = parts[0].trim();
-    let dupr = parts[1] ? parseFloat(parts[1].trim()) : null;
-    if (isNaN(dupr)) dupr = null;
-    return { name, dupr, played:0, wins:0, losses:0, lastPlayed:0 };
-  }).filter(p => p.name);
+function setup(){
+ var n=(S&&S.draftN)||12;
+ $('app').innerHTML='<div class="card"><h2>開局設定</h2>'+
+ '<div class="row"><div><label>人數</label><input id="n" type="number" min="4" value="'+n+'" onchange="fillNames()"></div>'+
+ '<div><label>場地數</label><input id="c" type="number" min="1" value="3"></div></div>'+
+ '<label>連續上場上限（輪，0＝不限；達到上限會優先輪休）</label><input id="mx" type="number" min="0" value="3">'+
+ '<label>模式</label><select id="m">'+Object.keys(MODES).map(function(k){return'<option value="'+k+'">'+MODES[k]+'</option>'}).join('')+'</select>'+
+ '<label>球員名單（每行：名字, DUPR評分, DUPR ID；後兩項選填，DUPR 模式需評分）</label>'+
+ '<textarea id="p"></textarea><div id="msg" style="color:var(--wn);font-size:14px;margin-top:8px"></div><br><div class="row"><button onclick="start()">開始</button><button class="g" onclick="showQR()">QR Code</button></div>'+
+ '<div id="qr" style="text-align:center;margin-top:10px"></div></div>';
+ fillNames();
 }
-
-function findPlayer(name){ return state.players.find(p => p.name === name); }
-function ratingTag(name){
-  const p = findPlayer(name);
-  return (p && p.dupr != null) ? '<span class="rating-tag">DUPR ' + p.dupr + '</span>' : '';
+function fillNames(){
+ var n=+$('n').value||4,L=$('p').value.split('\n').filter(function(x){return x.trim()});
+ while(L.length<n)L.push('玩家'+(L.length+1));
+ $('p').value=L.slice(0,n).join('\n');
 }
-
-/* ---------- 開始 ---------- */
+function showQR(id){
+ id=id||'qr';
+ try{var q=qrcode(0,'M');q.addData(location.href);q.make();$(id).innerHTML=q.createSvgTag(4)+'<div class="mu">球員掃描即可即時查看對戰表（需能開啟此頁）</div>'}catch(e){$(id).textContent='QR 產生失敗'}
+}
 function start(){
-  const players = parsePlayers();
-  if (players.length < 5) { alert('至少需要 5 位球員才能輪替排場'); return; }
-  let courts = parseInt($('courts').value);
-  if (players.length < courts * 4 + 1) {
-    courts = Math.max(1, Math.floor(players.length / 4));
-    if (players.length - courts * 4 === 0 && players.length >= courts * 4 + 1) courts = courts;
-    alert('球員不足 ' + courts * 4 + '+1 人，自動調整為 ' + courts + ' 面場地');
-  }
-  state = { players, courts, round: 0, assignment: null, matches: [], lastResults: [] };
-  save(); nextRound(); show('game');
+ var m=$('m').value,P=$('p').value.split('\n').filter(function(x){return x.trim()}).map(function(l,i){
+  var a=l.split(/[,，]/).map(function(x){return x.trim()});
+  return{id:i,name:a[0],r:parseFloat(a[1])||0,duprId:a[2]||'',g:0,w:0,l:0,pd:0,last:-1,st:0,away:false,pa:{},op:{}}});
+ if(P.length<4)return msg('至少需要 4 位球員');
+ if(m==='dupr'&&P.some(function(p){return!p.r}))return msg('DUPR 模式需要每位球員的評分。請在名單每行填入，例如：小明, 3.45, DUPR ID（目前缺：'+P.filter(function(p){return!p.r}).map(function(p){return p.name}).join('、')+'）');
+ S={maxStreak:+$('mx').value||0,mode:m,courts:Math.max(1,+$('c').value||1),players:P,rounds:[],ended:false};
+ S.rounds.push(gen());save();render();
 }
-
-/* ---------- 公平排場 ---------- */
-function shuffle(a){ for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
-
-function nextRound(){
-  const pool = shuffle([...state.players]).sort((a, b) => a.played - b.played || a.lastPlayed - b.lastPlayed);
-  const slots = state.courts * 4;
-  const usableCourts = Math.min(state.courts, Math.floor(pool.length / 4));
-  const playing = pool.slice(0, usableCourts * 4);
-  const resting = pool.slice(playing.length);
-
-  const courts = [];
-  for (let c = 0; c < usableCourts; c++) {
-    const four = shuffle(playing.slice(c * 4, c * 4 + 4));
-    courts.push({ a: [four[0].name, four[1].name], b: [four[2].name, four[3].name] });
-  }
-  state.round++;
-  state.assignment = { courts, resting: resting.map(p => p.name) };
-  playing.forEach(p => { p.played++; p.lastPlayed = state.round; });
-  save(); render();
+var CF='';
+function msg(t){var e=$('msg');if(e){e.textContent=t;e.scrollIntoView({block:'nearest'})}}
+function ask(k,fn){if(CF===k){CF='';fn()}else{CF=k;render();setTimeout(function(){if(CF===k){CF='';render()}},4000)}}
+function shuffle(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t}return a}
+function P(id){return S.players[id]}
+function cnt(o,k){return o[k]||0}
+function pairCost(a,b){ // a,b: arrays of 2 ids
+ var c=cnt(P(a[0]).pa,a[1])*10+cnt(P(b[0]).pa,b[1])*10;
+ a.forEach(function(x){b.forEach(function(y){c+=cnt(P(x).op,y)*3})});
+ if(S.mode==='dupr'){var d=Math.abs(P(a[0]).r+P(a[1]).r-P(b[0]).r-P(b[1]).r);c+=d*15}
+ return c}
+function best4(q){ // choose best pairing of 4 ids
+ var o=[[[q[0],q[1]],[q[2],q[3]]],[[q[0],q[2]],[q[1],q[3]]],[[q[0],q[3]],[q[1],q[2]]]],b=null,bc=1e9;
+ o.forEach(function(x,i){var c=pairCost(x[0],x[1])+(S.mode==='rank'&&i===2?-0.5:0);if(c<bc){bc=c;b=x}});
+ return{a:b[0],b:b[1],c:bc}}
+function gen(){
+ var el=S.players.filter(function(p){return!p.away}),aw=S.players.filter(function(p){return p.away}).map(function(p){return p.id}),mx=S.maxStreak||0;
+ var nc=Math.min(S.courts,Math.floor(el.length/4)),slots=nc*4;
+ var ov=function(p){return mx>0&&(p.st||0)>=mx?1:0};
+ var pool=el.map(function(p){return{p:p,k:Math.random()}}).sort(function(x,y){return ov(x.p)-ov(y.p)||x.p.g-y.p.g||x.p.last-y.p.last||x.k-y.k}).map(function(x){return x.p});
+ var act=pool.slice(0,slots).map(function(p){return p.id}),bench=pool.slice(slots).map(function(p){return p.id}).concat(aw),ms=[];
+ if(S.mode==='fair'){
+  var bestC=1e9,bm=null;
+  for(var t=0;t<150;t++){var sh=shuffle(act),tot=0,cur=[];
+   for(var i=0;i<nc;i++){var r=best4(sh.slice(i*4,i*4+4));tot+=r.c;cur.push(r)}
+   if(tot<bestC){bestC=tot;bm=cur}}
+  ms=bm||[];
+ }else{
+  var key=function(id){var p=P(id);return S.mode==='dupr'?p.r+Math.random()*0.001:p.w*3+p.pd/10+Math.random()*0.5};
+  act.sort(function(a,b){return key(b)-key(a)});
+  for(var i=0;i<nc;i++)ms.push(best4(act.slice(i*4,i*4+4)));
+ }
+ return{matches:ms.map(function(m,i){return{c:i+1,a:m.a,b:m.b,sa:'',sb:'',w:''}}),bench:bench};
 }
-
-/* ---------- 畫面 ---------- */
+function setScore(r,m,side,v){
+ var x=S.rounds[r].matches[m];x[side]=v===''?'':+v;
+ if(x.sa!==''&&x.sb!==''&&x.sa!==x.sb)x.w=x.sa>x.sb?'a':'b';else if(x.sa===x.sb)x.w='';
+ save();render();}
+function setWin(r,m,w){var x=S.rounds[r].matches[m];x.w=w;save();render()}
+function roundDone(r){return S.rounds[r].matches.every(function(m){
+ return m.w&&(S.mode!=='dupr'||(m.sa!==''&&m.sb!==''))})}
+function apply(r){
+ var ri=r;S.rounds[r].matches.forEach(function(m){
+  var all=m.a.concat(m.b),d=(m.sa!==''&&m.sb!=='')?Math.abs(m.sa-m.sb):0;
+  all.forEach(function(id){P(id).g++;P(id).st=(P(id).st||0)+1;P(id).last=ri});
+  [m.a,m.b].forEach(function(t,ti){
+   var won=(ti===0)===(m.w==='a');
+   t.forEach(function(id){var p=P(id);won?p.w++:p.l++;p.pd+=won?d:-d});
+   P(t[0]).pa[t[1]]=cnt(P(t[0]).pa,t[1])+1;P(t[1]).pa[t[0]]=cnt(P(t[1]).pa,t[0])+1});
+  m.a.forEach(function(x){m.b.forEach(function(y){P(x).op[y]=cnt(P(x).op,y)+1;P(y).op[x]=cnt(P(y).op,x)+1})});
+ });
+ S.players.forEach(function(p){if(p.last!==ri)p.st=0});}
+function toggleAway(id){
+ P(id).away=!P(id).away;var R=S.rounds[S.rounds.length-1];
+ if(R.matches.every(function(m){return!m.w&&m.sa===''&&m.sb===''}))S.rounds[S.rounds.length-1]=gen();
+ save();render()}
+function next(){var r=S.rounds.length-1;apply(r);S.rounds.push(gen());save();render()}
+function finish(){ask('fin',function(){apply(S.rounds.length-1);S.ended=true;save();render()})}
+function reset(){ask('rst',function(){S=null;try{localStorage.removeItem(KEY)}catch(e){}pushLive();render()})}
+function expv(){if(!S.exp)S.exp={event:'Open Play',loc:'',date:new Date().toISOString().slice(0,10),mt:'SIDE_ONLY',st:''};return S.exp}
+var HDR=['matchType','event','date','playerA1','playerA1DuprId','playerA1ExternalId','playerA2','playerA2DuprId','playerA2ExternalId','playerB1','playerB1DuprId','playerB1ExternalId','playerB2','playerB2DuprId','playerB2ExternalId','teamAGame1','teamBGame1','teamAGame2','teamBGame2','teamAGame3','teamBGame3','teamAGame4','teamBGame4','teamAGame5','teamBGame5','location','scoreType'];
+function csv(){
+ var e=expv(),rows=[HDR];
+ S.rounds.forEach(function(r){r.matches.forEach(function(m){
+  if(!m.w||m.sa===''||m.sb==='')return;
+  var f=function(id){return[P(id).name,P(id).duprId,'']};
+  rows.push([e.mt,e.event,e.date].concat(f(m.a[0]),f(m.a[1]),f(m.b[0]),f(m.b[1]),[m.sa,m.sb,'','','','','','','','',e.loc,e.st]))})});
+ return rows.map(function(r){return r.map(function(c){return'"'+String(c).replace(/"/g,'""')+'"'}).join(',')}).join('\n')}
+function skipped(){var n=0;S.rounds.forEach(function(r){r.matches.forEach(function(m){if(m.w&&(m.sa===''||m.sb===''))n++})});return n}
+function noId(){return S.players.filter(function(p){return!p.duprId}).map(function(p){return esc(p.name)})}
+function ex(k,v){expv()[k]=v;save();$('csv').value=csv()}
+function expForm(){
+ var e=expv(),I=function(k,l){return'<label>'+l+'</label><input value="'+esc(e[k])+'" oninput="ex(\''+k+'\',this.value)">'};
+ var w='',sk=skipped(),mi=noId();
+ if(sk)w+='<div class="mu" style="color:var(--wn)">⚠ '+sk+' 場只選了勝隊、沒有比分，未列入 CSV（DUPR 需要比分）。</div>';
+ if(mi.length)w+='<div class="mu" style="color:var(--wn)">⚠ 缺少 DUPR ID：'+mi.join('、')+'。上傳時 DUPR 會要求你手動比對這些球員。</div>';
+ return I('event','活動名稱 event')+I('date','日期 date（yyyy-MM-dd）')+I('loc','地點 location')+I('mt','matchType')+I('st','scoreType（請對照 DUPR 範本填寫）')+w}
+function copyCsv(){var t=$('csv'),ok=false;t.focus();t.select();try{ok=document.execCommand('copy')}catch(e){}if(!ok){try{navigator.clipboard.writeText(t.value);ok=true}catch(e){}}$('cm').textContent=ok?'已複製 ✔':'無法自動複製，請長按上方文字框手動全選複製'}
+function nm(t){return t.map(function(id){return esc(P(id).name)}).join(' ＋ ')}
+function stand(){
+ var L=S.players.slice().sort(function(a,b){return b.w-a.w||b.pd-a.pd||a.g-b.g});
+ return'<div class="card tw"><h2>排名 / 上場統計</h2><table><tr><th>#</th><th>球員</th><th>場數</th><th>勝</th><th>負</th><th>分差</th>'+(S.ended?'':'<th>休息</th>')+'</tr>'+
+ L.map(function(p,i){return'<tr><td>'+(i+1)+'</td><td>'+esc(p.name)+'</td><td>'+p.g+'</td><td>'+p.w+'</td><td>'+p.l+'</td><td>'+p.pd+'</td>'+(S.ended?'':'<td><button class="'+(p.away?'w':'g')+'" style="padding:3px 8px" onclick="toggleAway('+p.id+')">'+(p.away?'歸隊':'暫離')+'</button></td>')+'</tr>'}).join('')+'</table></div>'}
 function render(){
-  $('headerInfo').textContent = '球員 ' + state.players.length + ' 人 · 場地 ' + state.assignment.courts.length + ' 面';
-  $('roundTitle').textContent = '第 ' + state.round + ' 輪';
-
-  $('courtList').innerHTML = state.assignment.courts.map((c, i) =>
-    '<div class="card court"><h3>場地 ' + (i + 1) + '</h3>' +
-    '<div class="team"><span>' + esc(c.a[0]) + ratingTag(c.a[0]) + '</span><span>' + esc(c.a[1]) + ratingTag(c.a[1]) + '</span></div>' +
-    '<div class="vs">VS</div>' +
-    '<div class="team"><span>' + esc(c.b[0]) + ratingTag(c.b[0]) + '</span><span>' + esc(c.b[1]) + ratingTag(c.b[1]) + '</span></div>' +
-    '</div>').join('');
-
-  $('restList').innerHTML = state.assignment.resting.length
-    ? state.assignment.resting.map(n => '<span class="tag">' + esc(n) + ratingTag(n) + '</span>').join('')
-    : '<span class="hint">無人休息</span>';
-
-  if (state.lastResults.length) {
-    $('lastResultCard').style.display = 'block';
-    $('lastResult').innerHTML = state.lastResults.map(r =>
-      '<div class="result-line">場地 ' + r.court + '：' + esc(r.team1.join(' & ')) +
-      ' <b>' + r.score1 + ' : ' + r.score2 + '</b> ' + esc(r.team2.join(' & ')) + '</div>').join('');
-  }
-
-  $('statsTable').innerHTML =
-    '<tr><th>球員</th><th>DUPR</th><th>上場</th><th>勝</th><th>敗</th><th></th></tr>' +
-    state.players.map(p =>
-      '<tr><td>' + esc(p.name) + '</td><td>' + (p.dupr != null ? p.dupr : '-') + '</td><td>' + p.played + '</td><td>' + p.wins + '</td><td>' + p.losses + '</td>' +
-      '<td><button class="xbtn" onclick="leavePlayer(\'' + esc(p.name).replace(/'/g, "\\'") + '\')">✕</button></td></tr>').join('');
-}
-
-function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-
-/* ---------- 功能 1：結束本輪 → 輸入分數 ---------- */
-function openScoreModal(){
-  $('mRoundNum').textContent = state.round;
-  $('modalScores').innerHTML = state.assignment.courts.map((c, i) =>
-    '<div class="matchbox">' +
-    '<div style="font-weight:bold; font-size:.9rem;">場地 ' + (i + 1) + '</div>' +
-    '<div style="font-size:.85rem; color:#555;">A隊：' + esc(c.a.join(' & ')) + '</div>' +
-    '<div style="font-size:.85rem; color:#555;">B隊：' + esc(c.b.join(' & ')) + '</div>' +
-    '<div class="scoreline"><input type="number" id="mScoreA_' + i + '" min="0" placeholder="A分"><span>:</span><input type="number" id="mScoreB_' + i + '" min="0" placeholder="B分"></div>' +
-    '</div>').join('');
-  $('scoreModal').style.display = 'flex';
-}
-function closeScoreModal(){ $('scoreModal').style.display = 'none'; }
-
-function confirmRoundScores(){
-  const results = [];
-  for (let i = 0; i < state.assignment.courts.length; i++) {
-    const sa = $('mScoreA_' + i).value, sb = $('mScoreB_' + i).value;
-    if (sa === '' || sb === '') { alert('請輸入場地 ' + (i + 1) + ' 的雙方分數'); return; }
-    results.push({ court: i + 1, a: state.assignment.courts[i].a, b: state.assignment.courts[i].b, scoreA: parseInt(sa), scoreB: parseInt(sb) });
-  }
-
-  const today = new Date().toISOString().split('T')[0];
-  state.lastResults = results.map(r => ({
-    court: r.court, team1: [...r.a], team2: [...r.b],
-    score1: Math.max(r.scoreA, r.scoreB), score2: Math.min(r.scoreA, r.scoreB)
-  }));
-
-  results.forEach(r => {
-    const t1wins = r.scoreA > r.scoreB;
-    state.matches.push({
-      date: today, round: state.round, court: r.court,
-      team1: [...r.a], team2: [...r.b],
-      score1: Math.max(r.scoreA, r.scoreB), score2: Math.min(r.scoreA, r.scoreB)
-    });
-    [...r.a].forEach(n => { const p = findPlayer(n); if (p) { t1wins ? p.wins++ : p.losses++; } });
-    [...r.b].forEach(n => { const p = findPlayer(n); if (p) { t1wins ? p.losses++ : p.wins++; } });
+ if(!IS_ED)return vrender();
+ if(!S)return setup();
+ var ri=S.rounds.length-1,R=S.rounds[ri],h='';
+ if(S.ended){
+  h='<div class="card"><h2>🏁 比賽結束（共 '+S.rounds.length+' 輪）</h2><div class="mu">已照 DUPR「Import Matches」範本的 27 欄格式輸出。</div>'+expForm()+'<br><textarea id="csv" readonly>'+esc(csv())+'</textarea><br><br><div class="mu">上傳：DUPR 網站 → 你的 Club → Matches → Import Matches via CSV（需為 Club 管理者）。</div><br><div class="row"><button onclick="copyCsv()">複製紀錄</button><button class="w" onclick="reset()">'+(CF==='rst'?'再按一次確認':'重新開局')+'</button></div><div id="cm" class="mu"></div></div>'+stand();
+  $('app').innerHTML=h;return;
+ }
+ h='<div class="card"><div class="row"><div><b>第 '+(ri+1)+' 輪</b><div class="mu">'+MODES[S.mode]+'</div></div><button class="g" onclick="showQR(\'qr2\')">球員QR</button><button class="g" onclick="tab=tab===\'play\'?\'rank\':\'play\';render()">'+(tab==='play'?'看排名':'回對戰')+'</button></div><div id="qr2" style="text-align:center"></div></div>';
+ if(tab==='rank')h+=stand();
+ else{
+  if(!R.matches.length)h+='<div class="card">目前可上場人數不足 4 人，請到「看排名」讓暫離球員歸隊。</div>';
+  R.matches.forEach(function(m,i){
+   var T=function(side,t){var w=m.w===side;return'<div class="team"><b class="'+(w?'win':'')+'">'+(w?'🏆 ':'')+nm(t)+'</b>'+
+    '<input class="sc" type="number" min="0" inputmode="numeric" placeholder="分" value="'+m['s'+side]+'" onchange="setScore('+ri+','+i+',\'s'+side+'\',this.value)">'+
+    (S.mode==='dupr'?'':'<button class="g" onclick="setWin('+ri+','+i+',\''+side+'\')">勝</button>')+'</div>'};
+   h+='<div class="card"><h2>場地 '+m.c+'</h2>'+T('a',m.a)+'<div class="mu" style="text-align:center">VS</div>'+T('b',m.b)+'</div>';
   });
-
-  closeScoreModal();
-  nextRound();
+  h+='<div class="card"><b>休息中：</b>'+(R.bench.length?R.bench.map(function(id){return esc(P(id).name)+(P(id).away?'（暫離）':'')}).join('、'):'無')+'</div>';
+ }
+ var ok=roundDone(ri);
+ h+='<div class="row"><button onclick="next()" '+(ok?'':'disabled')+'>下一輪</button><button class="w" onclick="finish()" '+(ok?'':'disabled')+'>'+(CF==='fin'?'再按一次確認結束':'結束比賽')+'</button></div>'+
+ (ok?'':'<div class="mu" style="margin-top:6px">'+(S.mode==='dupr'?'請輸入所有場地比分':'請選出所有場地的勝隊')+'後才能繼續</div>')+
+ '<div style="margin-top:12px"><button class="g" onclick="reset()">'+(CF==='rst'?'再按一次確認重設':'重設')+'</button></div>';
+ $('app').innerHTML=h;
 }
-
-/* ---------- 功能 3：匯出 DUPR CSV ---------- */
-function exportDUPRCSV(){
-  if (!state.matches.length) { alert('目前尚無完成的對戰紀錄，請先在「結束本輪」時輸入比分'); return; }
-
-  const csvEscape = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-  const headers = [
-    'Match Date',
-    'Player 1 First Name','Player 1 Last Name','Player 1 Email','Player 1 DUPR ID',
-    'Player 2 First Name','Player 2 Last Name','Player 2 Email','Player 2 DUPR ID',
-    'Player 3 First Name','Player 3 Last Name','Player 3 Email','Player 3 DUPR ID',
-    'Player 4 First Name','Player 4 Last Name','Player 4 Email','Player 4 DUPR ID',
-    'Game 1 Team 1 Score','Game 1 Team 2 Score'
-  ];
-  const cols = name => { const p = findPlayer(name) || {}; const seg = String(name).trim().split(/\s+/); return [seg[0] || name, seg.slice(1).join(' ') || '', p.email || '', p.dupr != null ? p.dupr : '']; };
-
-  const rows = state.matches.map(m => {
-    const p1 = cols(m.team1[0]), p2 = cols(m.team1[1]), p3 = cols(m.team2[0]), p4 = cols(m.team2[1]);
-    return [csvEscape(m.date),
-      ...p1.map(csvEscape), ...p2.map(csvEscape), ...p3.map(csvEscape), ...p4.map(csvEscape),
-      m.score1, m.score2].join(',');
-  });
-
-  const blob = new Blob(['\ufeff' + headers.join(',') + '\n' + rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'dupr_matches_' + new Date().toISOString().split('T')[0] + '.csv';
-  a.click(); URL.revokeObjectURL(a.href);
-}
-
-/* ---------- 其他 ---------- */
-function addPlayer(){
-  const name = $('newName').value.trim();
-  if (!name) return;
-  if (findPlayer(name)) { alert('已有同名球員'); return; }
-  let dupr = parseFloat($('newDupr').value);
-  state.players.push({ name, dupr: isNaN(dupr) ? null : dupr, played:0, wins:0, losses:0, lastPlayed:0 });
-  $('newName').value = ''; $('newDupr').value = '';
-  save(); render(); alert('已加入，下一輪會自動排入');
-}
-
-function leavePlayer(name){
-  if (!confirm('確定讓「' + name + '」離場？')) return;
-  state.players = state.players.filter(p => p.name !== name);
-  state.assignment.courts.forEach(c => { c.a = c.a.filter(n => n !== name); c.b = c.b.filter(n => n !== name); });
-  state.assignment.resting = state.assignment.resting.filter(n => n !== name);
-  save(); render();
-}
-
-function viewURL(){
-  return location.origin + location.pathname + '#v=' + encodeURIComponent(JSON.stringify({
-    round: state.round, courts: state.assignment.courts, resting: state.assignment.resting
-  }));
-}
-function showQR(){
-  $('qrbox').innerHTML = '';
-  new QRCode($('qrbox'), { text: viewURL(), width: 180, height: 180 });
-}
-function copyLink(){
-  navigator.clipboard.writeText(viewURL()).then(() => alert('已複製本輪連結'));
-}
-function resetAll(){
-  if (!confirm('確定全部重來？所有紀錄會清除')) return;
-  localStorage.removeItem(KEY); location.reload
+(async function(){
+ var c=window.claude;
+ if(!c||!c.use){render();return}
+ $('app').innerHTML='<div class="card mu">載入中…</div>';
+ try{var u=await c.use('user');DB=await c.use('db');IS_ED=u?await u.canEdit():false}catch(e){IS_ED=false}
+ if(!IS_ED){
+  if(DB){try{DB.doc('live/state').onSnapshot(function(s){LIVE=s.exists?JSON.parse(s.data().j):null;vrender()},function(){LIVE=null;vrender()})}catch(e){LIVE=null}}
+  else LIVE=null;
+ }
+ render();if(IS_ED&&S)pushLive();
+})();
+</script></body></html>
