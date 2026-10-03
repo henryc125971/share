@@ -56,6 +56,13 @@ if(!ALL){try{var o2=JSON.parse(localStorage.getItem('pb-openplay-v2')||'null');i
 if(!ALL||ALL.v!==3)ALL={v:3,list:[],i:0};
 S=ALL.list[ALL.i]||null;
 try{vi=+localStorage.getItem('pb-vs')||0}catch(e){}
+/* ▼▼ 只需改這一行：貼上你的 Firebase 資料庫網址，所有手機就會自動可用 ▼▼ */
+var FIREBASE_URL='https://pickle-ball-open-play-system-default-rtdb.asia-southeast1.firebasedatabase.app';
+var QP=new URLSearchParams(location.search),RM=QP.get('room')||'',FBU=QP.get('db')||'',FB=false,ROOM='';
+FBU=FBU||FIREBASE_URL;
+try{FBU=FBU||localStorage.getItem('pb-fbu')||''}catch(e){}
+FBU=FBU.replace(/\/+$/,'');
+var WATCH=false;try{WATCH=localStorage.getItem('pb-watch')==='1'&&ALL.list.length===0}catch(e){}
 var MODES={fair:'一般隨機（公平上場）',rank:'強弱分流（依輸贏分級）',dupr:'DUPR 實力配對'};
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
 function $(i){return document.getElementById(i)}
@@ -74,15 +81,30 @@ function pubOne(){
   q:S.queue.map(function(i){return P(i).name}),nx:nx?{a:names(nx.a),b:names(nx.b)}:null,
   names:S.players.map(function(p){return p.name}),
   st:stSort().map(function(p){return{n:p.name,g:p.g,w:p.w,l:p.l,pd:p.pd}})}}
+function liveJson(){var keep=S,arr=ALL.list.map(function(x){S=x;return pubOne()});S=keep;return JSON.stringify({s:arr})}
 function pushLive(){
- if(!DB||!IS_ED)return;clearTimeout(pt);
+ if(!(DB||FB)||!IS_ED||WATCH)return;clearTimeout(pt);
  pt=setTimeout(function(){
-  var keep=S,arr=ALL.list.map(function(x){S=x;return pubOne()});S=keep;
-  try{DB.doc('live/state').set({j:JSON.stringify({s:arr}),t:Date.now()}).catch(function(){})}catch(e){}
+  var j=liveJson();
+  if(FB){try{fetch(FBU+'/rooms/'+ROOM+'.json',{method:'PUT',body:JSON.stringify({j:j,t:Date.now()})}).catch(function(){})}catch(e){}return}
+  try{DB.doc('live/state').set({j:j,t:Date.now()}).catch(function(){})}catch(e){}
  },700)}
+function rid(){var a=new Uint8Array(14);crypto.getRandomValues(a);return Array.prototype.map.call(a,function(x){return(x%36).toString(36)}).join('')}
+function poll(){try{fetch(FBU+'/rooms/'+RM+'.json').then(function(r){return r.json()}).then(function(d){LIVE=d&&d.j?JSON.parse(d.j):null;vrender()}).catch(function(){})}catch(e){}}
+function initFB(){
+ if(!FBU)return;FB=true;
+ if(RM){IS_ED=false;poll();setInterval(poll,5000);return}
+ try{ROOM=localStorage.getItem('pb-room')||''}catch(e){}
+ if(!ROOM){ROOM=rid();try{localStorage.setItem('pb-room',ROOM)}catch(e){}}}
+function fbCard(){return'<div class="card"><b>☁️ 即時查看（選用）</b><div class="mu">貼上你的 Firebase 資料庫網址，球員掃 QR 就能即時看對戰表。'+(FB?'<br>✅ 已啟用':'')+'</div><input id="fbu" placeholder="https://xxxx-default-rtdb.xxx.firebasedatabase.app" value="'+esc(FBU)+'"><br><br><button class="g" onclick="saveFB()">儲存</button></div>'}
+function saveFB(){var v=$('fbu').value.trim().replace(/\/+$/,'');try{localStorage.setItem('pb-fbu',v)}catch(e){}FBU=v;FB=false;initFB();render();if(FB&&ALL.list.length)pushLive()}
 function setSess(i){vi=i;try{localStorage.setItem('pb-vs',i)}catch(e){}render()}
 function setMe(v){try{localStorage.setItem('pb-me',v)}catch(e){}render()}
+function setWatch(on){WATCH=on;try{localStorage.setItem('pb-watch',on?'1':'0')}catch(e){}render()}
 function vrender(){
+ vr2();
+ if(IS_ED)$('app').insertAdjacentHTML('afterbegin','<div style="margin-bottom:10px"><button class="g" onclick="setWatch(false)">← 我要當主辦人開局</button></div>')}
+function vr2(){
  if(LIVE===undefined)return $('app').innerHTML='<div class="card mu">連線中…</div>';
  var A=LIVE&&LIVE.s;
  if(!A||!A.length)return $('app').innerHTML='<div class="card">主辦人尚未開局，開局後這裡會即時更新。</div>';
@@ -106,7 +128,7 @@ function vrender(){
 
 function setup(){
  var n=12;
- $('app').innerHTML='<div class="card"><div class="hero">今天誰跟誰一隊？<br><span class="win">讓球來決定！</span></div><div class="mu" style="margin:6px 0 4px">三種玩法任你挑，保證再也沒人問「我是不是又沒上場」。</div>'+
+ $('app').innerHTML=(window.claude||FIREBASE_URL?'':fbCard())+(DB&&!ALL.list.length?'<div class="card"><b>👀 球賽已經開打了？</b><div class="mu">用這支手機看即時對戰表，不會開新球局。</div><br><button class="g" onclick="setWatch(true)">我是球員，看即時對戰表</button></div>':'')+'<div class="card"><div class="hero">今天誰跟誰一隊？<br><span class="win">讓球來決定！</span></div><div class="mu" style="margin:6px 0 4px">三種玩法任你挑，保證再也沒人問「我是不是又沒上場」。</div>'+
  '<h2 style="margin-top:12px">① 選玩法</h2>'+modeCards()+'<h2 style="margin-top:14px">② 開局設定</h2>'+
  '<div class="row"><div><label>場次名稱</label><input id="sn" value="'+'ABCDEFGH'.charAt(ALL.list.length%8)+' 場"></div><div><label>場地編號從</label><input id="s0" type="number" min="1" value="'+nextCourt()+'"></div></div>'+
  '<div class="row"><div><label>人數</label><input id="n" type="number" min="4" value="'+n+'" onchange="fillNames()"></div>'+
@@ -141,9 +163,11 @@ function fillNames(){
  $('p').value=L.slice(0,n).join('\n');
 }
 function showQR(id){
- id=id||'qr';
- try{var q=qrcode(0,'M');q.addData(location.href);q.make();$(id).innerHTML=q.createSvgTag(4)+'<div class="mu">球員掃描即可即時查看對戰表（需能開啟此頁）</div>'}catch(e){$(id).textContent='QR 產生失敗'}
+ id=id||'qr';var u=location.href;try{u=localStorage.getItem('pb-url')||u}catch(e){}
+ if(FB)u=location.origin+location.pathname+'?room='+ROOM+(FIREBASE_URL?'':'&db='+encodeURIComponent(FBU));
+ try{var q=qrcode(0,'M');q.addData(u);q.make();$(id).innerHTML=q.createSvgTag(4)+'<div class="mu">'+(FB?'球員掃描即可直接看即時對戰表':'球員掃描後，點「我是球員」就能看即時對戰表')+'</div><label>分享連結（可貼上正確網址）</label><input value="'+esc(u)+'" onchange="setUrl(this.value,\''+id+'\')">'}catch(e){$(id).textContent='QR 產生失敗'}
 }
+function setUrl(v,id){try{localStorage.setItem('pb-url',v.trim())}catch(e){}showQR(id)}
 function msg(t){var e=$('msg');if(e){e.textContent=t;e.scrollIntoView({block:'nearest'})}}
 function ask(k,fn){if(CF===k){CF='';fn()}else{CF=k;render();setTimeout(function(){if(CF===k){CF='';render()}},4000)}}
 function shuffle(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t}return a}
@@ -251,7 +275,7 @@ function stand(){
  return'<div class="card tw"><h2>排名 / 上場統計</h2><table><tr><th>#</th><th>球員</th><th>場數</th><th>勝</th><th>負</th><th>分差</th>'+(S.ended?'':'<th>暫離</th>')+'</tr>'+
  stSort().map(function(p,i){return'<tr><td>'+(i+1)+'</td><td>'+esc(p.name)+'</td><td>'+p.g+'</td><td>'+p.w+'</td><td>'+p.l+'</td><td>'+p.pd+'</td>'+(S.ended?'':'<td><button class="'+(p.away?'w':'g')+'" style="padding:3px 8px" onclick="toggleAway('+p.id+')">'+(p.away?'歸隊':'暫離')+'</button></td>')+'</tr>'}).join('')+'</table></div>'}
 function render(){
- if(!IS_ED)return vrender();
+ if(!IS_ED||WATCH)return vrender();
  renderMain();
  if(ALL.list.length)$('app').insertAdjacentHTML('afterbegin',tabsBar());
 }
@@ -287,13 +311,11 @@ function renderMain(){
 }
 (async function(){
  var c=window.claude;
- if(!c||!c.use){render();return}
+ if(!c||!c.use){initFB();render();if(FB&&IS_ED&&ALL.list.length)pushLive();return}
  $('app').innerHTML='<div class="card mu">載入中…</div>';
  try{var u=await c.use('user');DB=await c.use('db');IS_ED=u?await u.canEdit():false}catch(e){IS_ED=false}
- if(!IS_ED){
-  if(DB){try{DB.doc('live/state').onSnapshot(function(s){LIVE=s.exists?JSON.parse(s.data().j):null;vrender()},function(){LIVE=null;vrender()})}catch(e){LIVE=null}}
-  else LIVE=null;
- }
+ if(DB){try{DB.doc('live/state').onSnapshot(function(s){LIVE=s.exists?JSON.parse(s.data().j):null;if(!IS_ED||WATCH)vrender()},function(){LIVE=null;if(!IS_ED||WATCH)vrender()})}catch(e){LIVE=null}}
+ else if(!IS_ED)LIVE=null;
  render();if(IS_ED&&ALL.list.length)pushLive();
 })();
 </script></body></html>
