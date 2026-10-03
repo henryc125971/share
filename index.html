@@ -97,6 +97,10 @@ function initFB(){
  try{ROOM=localStorage.getItem('pb-room')||''}catch(e){}
  if(!ROOM){ROOM=rid();try{localStorage.setItem('pb-room',ROOM)}catch(e){}}}
 function fbCard(){return'<div class="card"><b>☁️ 即時查看（選用）</b><div class="mu">貼上你的 Firebase 資料庫網址，球員掃 QR 就能即時看對戰表。'+(FB?'<br>✅ 已啟用':'')+'</div><input id="fbu" placeholder="https://xxxx-default-rtdb.xxx.firebasedatabase.app" value="'+esc(FBU)+'"><br><br><button class="g" onclick="saveFB()">儲存</button></div>'}
+function joinCard(){return'<div class="card"><b>👀 球賽已經開打了？</b><div class="mu">用這支手機看即時對戰表，不會開新球局。請貼上主辦人給的房間代碼或球員連結（或直接掃主辦人的 QR）。</div><input id="rc" placeholder="房間代碼或連結" style="margin-top:8px"><div id="rcm" class="mu" style="color:var(--wn)"></div><br><button class="g" onclick="joinRoom()">我是球員，看即時對戰表</button></div>'}
+function joinRoom(){var v=$('rc').value.trim(),m=v.match(/room=([a-z0-9]+)/i),c=m?m[1]:v;
+ if(!/^[a-z0-9]{8,}$/i.test(c)){$('rcm').textContent='請輸入主辦人提供的房間代碼';return}
+ location.href=location.pathname+'?room='+c}
 function saveFB(){var v=$('fbu').value.trim().replace(/\/+$/,'');try{localStorage.setItem('pb-fbu',v)}catch(e){}FBU=v;FB=false;initFB();render();if(FB&&ALL.list.length)pushLive()}
 function setSess(i){vi=i;try{localStorage.setItem('pb-vs',i)}catch(e){}render()}
 function setMe(v){try{localStorage.setItem('pb-me',v)}catch(e){}render()}
@@ -128,7 +132,7 @@ function vr2(){
 
 function setup(){
  var n=12;
- $('app').innerHTML=(window.claude||FIREBASE_URL?'':fbCard())+(DB&&!ALL.list.length?'<div class="card"><b>👀 球賽已經開打了？</b><div class="mu">用這支手機看即時對戰表，不會開新球局。</div><br><button class="g" onclick="setWatch(true)">我是球員，看即時對戰表</button></div>':'')+'<div class="card"><div class="hero">今天誰跟誰一隊？<br><span class="win">讓球來決定！</span></div><div class="mu" style="margin:6px 0 4px">三種玩法任你挑，保證再也沒人問「我是不是又沒上場」。</div>'+
+ $('app').innerHTML=(window.claude||FIREBASE_URL?'':fbCard())+(FB&&!RM&&!ALL.list.length?joinCard():'')+(DB&&!ALL.list.length?'<div class="card"><b>👀 球賽已經開打了？</b><div class="mu">用這支手機看即時對戰表，不會開新球局。</div><br><button class="g" onclick="setWatch(true)">我是球員，看即時對戰表</button></div>':'')+'<div class="card"><div class="hero">今天誰跟誰一隊？<br><span class="win">讓球來決定！</span></div><div class="mu" style="margin:6px 0 4px">三種玩法任你挑，保證再也沒人問「我是不是又沒上場」。</div>'+
  '<h2 style="margin-top:12px">① 選玩法</h2>'+modeCards()+'<h2 style="margin-top:14px">② 開局設定</h2>'+
  '<div class="row"><div><label>場次名稱</label><input id="sn" value="'+'ABCDEFGH'.charAt(ALL.list.length%8)+' 場"></div><div><label>場地編號從</label><input id="s0" type="number" min="1" value="'+nextCourt()+'"></div></div>'+
  '<div class="row"><div><label>人數</label><input id="n" type="number" min="4" value="'+n+'" onchange="fillNames()"></div>'+
@@ -165,7 +169,7 @@ function fillNames(){
 function showQR(id){
  id=id||'qr';var u=location.href;try{u=localStorage.getItem('pb-url')||u}catch(e){}
  if(FB)u=location.origin+location.pathname+'?room='+ROOM+(FIREBASE_URL?'':'&db='+encodeURIComponent(FBU));
- try{var q=qrcode(0,'M');q.addData(u);q.make();$(id).innerHTML=q.createSvgTag(4)+'<div class="mu">'+(FB?'球員掃描即可直接看即時對戰表':'球員掃描後，點「我是球員」就能看即時對戰表')+'</div><label>分享連結（可貼上正確網址）</label><input value="'+esc(u)+'" onchange="setUrl(this.value,\''+id+'\')">'}catch(e){$(id).textContent='QR 產生失敗'}
+ try{var q=qrcode(0,'M');q.addData(u);q.make();$(id).innerHTML=q.createSvgTag(4)+'<div class="mu">'+(FB?'球員掃描即可直接看即時對戰表':'球員掃描後，點「我是球員」就能看即時對戰表')+'</div>'+(FB?'<div class="mu">房間代碼：<b>'+ROOM+'</b></div>':'')+'<label>分享連結（可貼上正確網址）</label><input value="'+esc(u)+'" onchange="setUrl(this.value,\''+id+'\')">'}catch(e){$(id).textContent='QR 產生失敗'}
 }
 function setUrl(v,id){try{localStorage.setItem('pb-url',v.trim())}catch(e){}showQR(id)}
 function msg(t){var e=$('msg');if(e){e.textContent=t;e.scrollIntoView({block:'nearest'})}}
